@@ -2,14 +2,7 @@ import socket
 import os
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
-
-# AES-GCM Encryption Function
-def encrypt(key, plaintext):
-    nonce = os.urandom(12)  # 12-byte nonce
-    cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
-    encryptor = cipher.encryptor()
-    ciphertext = encryptor.update(plaintext) + encryptor.finalize()
-    return nonce + encryptor.tag + ciphertext  # Return nonce + tag + ciphertext
+from crypt.aes_gcm import encrypt
 
 # Message Sending Function
 def send_secure_message(host, port, message, encryption_choice):

@@ -24,18 +24,3 @@ def decrypt(key, ciphertext):
     # Decrypt the ciphertext and verify the authentication tag
     plaintext = decryptor.update(actual_ciphertext) + decryptor.finalize()
     return plaintext
-
-# DUMMY TEST
-key = b'0123456789abcdef0123456789abcdef'  # 32 bytes key
-message = b'Hello there!'
-
-# Print the key
-print("Key:", key.hex())
-
-# Encrypt the message and print the result
-encrypted_message = encrypt(key, message)
-print("Encrypted message:", encrypted_message.hex())
-
-# Decrypt the message and print the result
-decrypted_message = decrypt(key, encrypted_message)
-print("Decrypted message:", decrypted_message.decode())
