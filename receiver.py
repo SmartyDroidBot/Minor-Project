@@ -41,7 +41,7 @@ def start_receiver(host, port):
                 print("Message (decoded):", data.decode(errors='ignore'))
 
 if __name__ == "__main__":
-    host = "127.0.0.1"  # Local testing
+    host = "0.0.0.0"  # globaltesting
     port = 12345  # Choose a free port
     start_receiver(host, port)
 
