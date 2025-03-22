@@ -2,6 +2,7 @@ import socket
 import threading
 from oqs import KeyEncapsulation, Signature
 import sys
+import urllib.request
 
 def establish_duplex_connection(ip, port, is_server=False):
     """
@@ -108,11 +109,7 @@ def get_ip_addresses():
     
     # Get public IP
     try:
-        public_ip = socket.gethostbyname(socket.gethostname())
-        # If this returns loopback address, try an external service
-        if public_ip.startswith('127.'):
-            import urllib.request
-            public_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
+        public_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf8')
     except Exception:
         public_ip = "Unable to determine public IP"
     
