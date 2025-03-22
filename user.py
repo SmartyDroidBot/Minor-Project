@@ -1,92 +1,95 @@
 import socket
-import os
-from cryptography.hazmat.backends import default_backend
-from crypt.aes_gcm import encrypt, decrypt
 import threading
-import time
 
-def send_secure_message():
-    host = input("Enter receiver's IP address: ").strip() or "127.0.0.1"
-    port = int(input("Enter receiver's port: ").strip() or "12345")
-    message = input("Enter your message: ").strip()
-
-    key_hex = input("Enter a 32-byte key (hex) or press Enter to generate one: ").strip()
-    if not key_hex:
-        key = os.urandom(32)  # Generate a random 32-byte key
-        key_hex = key.hex()
-        print(f"Generated key (hex): {key_hex}")
+def establish_duplex_connection(ip, port, is_server=False):
+    """
+    Establishes a full-duplex plaintext communication between two computers.
+    
+    Args:
+        ip (str): IP address to connect to or bind to
+        port (int): Port number to use
+        is_server (bool): If True, act as server and wait for connection
+                         If False, act as client and connect to server
+    
+    Returns:
+        socket: Connected socket object
+    """
+    if is_server:
+        # Server mode
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((ip, port))
+        server_socket.listen(1)
+        print(f"Server listening on {ip}:{port}")
+        conn, addr = server_socket.accept()
+        print(f"Connection established with {addr}")
+        server_socket.close()
+        return conn
     else:
-        key = bytes.fromhex(key_hex)  # Convert hex key to bytes
-    
-    encrypted_message = encrypt(key, message.encode())  # Encrypt message
+        # Client mode
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((ip, port))
+        print(f"Connected to server at {ip}:{port}")
+        return client_socket
 
-    
-    # Establish connection and send message
+def send_message(conn, message_queue):
+    """Continuously send messages from the queue"""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((host, port))
-            s.sendall(encrypted_message)
-            print("Message sent successfully.")
+        while True:
+            message = input("You: ")
+            conn.sendall(message.encode('utf-8'))
     except Exception as e:
-        print(f"Error sending message: {e}")
+        print(f"Send error: {e}")
+    finally:
+        conn.close()
 
-def start_receiver():
-    host = input("Enter IP address to listen on (default: 127.0.0.1): ").strip() or "127.0.0.1"
-    port = int(input("Enter port to listen on (default: 12345): ").strip() or "12345")
-    
-    print(f"Listening on {host}:{port}...")
-    print("(Press Ctrl+C to return to the main menu)")
-    
+def receive_message(conn):
+    """Continuously receive and display messages"""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind((host, port))
-            s.listen()
-            
-            # Set a timeout so we can catch KeyboardInterrupt
-            s.settimeout(1.0)
-            
-            while True:
-                try:
-                    conn, addr = s.accept()
-                    with conn:
-                        print(f"\nConnection from {addr}")
-                        data = conn.recv(1024)
-                        print("Received Message (Raw Hex):", data.hex())  # Print raw data
-
-                        key_hex = input("Enter the 32-byte key (hex) for decryption: ").strip()
-                        key = bytes.fromhex(key_hex)  # Convert hex key to bytes
-                        try:
-                            decrypted_message = decrypt(key, data)
-                            print("Decrypted Message:", decrypted_message.decode())
-                        except Exception as e:
-                            print("Decryption failed:", e)
-                except socket.timeout:
-                    # This is just to allow for keyboard interrupt
-                    continue
-    except KeyboardInterrupt:
-        print("\nStopping receiver...")
+        while True:
+            data = conn.recv(1024)
+            if not data:
+                print("Connection closed by remote host")
+                break
+            print(f"\nReceived: {data.decode('utf-8')}")
+            print("You: ", end='', flush=True)
     except Exception as e:
-        print(f"Error in receiver: {e}")
+        print(f"Receive error: {e}")
+    finally:
+        conn.close()
 
-def main_menu():
-    while True:
-        print("\n=== Secure Messaging Application ===")
-        print("1. Send a message")
-        print("2. Receive messages")
-        print("3. Exit")
+def start_duplex_communication(ip, port, is_server=False):
+    """
+    Start full-duplex communication between two computers.
+    
+    Args:
+        ip (str): IP address to connect to or bind to
+        port (int): Port number to use
+        is_server (bool): If True, act as server; if False, act as client
+    """
+    try:
+        conn = establish_duplex_connection(ip, port, is_server)
         
-        choice = input("\nEnter your choice (1-3): ").strip()
+        # Create threads for sending and receiving
+        message_queue = []
+        send_thread = threading.Thread(target=send_message, args=(conn, message_queue))
+        receive_thread = threading.Thread(target=receive_message, args=(conn,))
         
-        if choice == "1":
-            send_secure_message()
-        elif choice == "2":
-            start_receiver()
-        elif choice == "3":
-            print("Exiting application...")
-            break
-        else:
-            print("Invalid choice. Please try again.")
+        # Start threads
+        send_thread.daemon = True
+        receive_thread.daemon = True
+        send_thread.start()
+        receive_thread.start()
+        
+        # Wait for threads to complete
+        send_thread.join()
+        receive_thread.join()
+        
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        print("Communication ended")
 
-if __name__ == "__main__":
-    print("Welcome to the Secure Messaging Application")
-    main_menu()
+# Example usage:
+# To run as server: start_duplex_communication('0.0.0.0', 8888, is_server=True)
+# To run as client: start_duplex_communication('server_ip', 8888, is_server=False)
