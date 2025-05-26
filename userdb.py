@@ -69,30 +69,19 @@ class UserDB:
         return self.data.get("peers", {})
 
     def set_bundle(self, bundle: dict, private_keys: dict):
-        # For compatibility with existing code, store as identity_key/private_keys
-        self.set_identity_key(
-            base64.b64decode(bundle["x25519_identity"]),
-            base64.b64decode(bundle["kyber1024_identity"]),
-            base64.b64decode(bundle["dilithium2"])
-        )
-        self.set_private_keys(
-            private_keys["x25519"],
-            private_keys["kyber1024"],
-            private_keys["dilithium2"]
-        )
+        # Store X3DH state JSON and Kyber private key
+        self.data["identity_key"] = {
+            "x3dh_bundle": bundle["x3dh_bundle"],
+            "kyber1024_identity": bundle["kyber1024_identity"]
+        }
+        self.data["private_keys"] = {
+            "x3dh_state": private_keys["x3dh_state"],
+            "kyber1024": private_keys["kyber1024"]
+        }
         self.save()
 
     def get_bundle(self) -> dict:
-        # For compatibility, reconstruct a bundle from identity_key
-        idk = self.get_identity_key()
-        if not idk:
-            return {}
-        return {
-            "x25519_identity": idk.get("x25519", ""),
-            "kyber1024_identity": idk.get("kyber1024", ""),
-            "dilithium2": idk.get("dilithium2", "")
-        }
+        return self.data.get("identity_key", {})
 
     def get_private_keys_bundle(self) -> dict:
-        d = self.get_private_keys()
-        return {k: base64.b64decode(v) for k, v in d.items()}
+        return self.data.get("private_keys", {})

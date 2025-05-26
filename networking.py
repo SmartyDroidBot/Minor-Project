@@ -18,6 +18,7 @@ class ChatClient:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.host, self.port))
+            self.sock.settimeout(None)  # Ensure blocking mode after connect
             self.running = True
         except Exception as e:
             raise ConnectionError(str(e))
@@ -73,10 +74,12 @@ class ChatServer:
         self._accept_abort = False
         def accept_thread():
             try:
+                self.sock.settimeout(0.5)
                 while not self._accept_abort:
-                    self.sock.settimeout(0.5)
                     try:
                         self.client_sock, addr = self.sock.accept()
+                        self.sock.settimeout(None)  # Remove timeout after accept
+                        self.client_sock.settimeout(None)  # Ensure blocking mode for client_sock
                         self.running = True
                         self._accept_result = addr
                         break

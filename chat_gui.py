@@ -11,7 +11,8 @@ from chat_api import ChatAPI
 class ChatApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Python Chat App")
+        self.debug_mode = tk.BooleanVar(value=False)
+        self.title(self._get_title())
         self.geometry("600x500")
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.connection = None
@@ -21,6 +22,18 @@ class ChatApp(tk.Tk):
         self.error_var = tk.StringVar(value="")
         self.userdb = None  # Will be initialized after username is set
         self._build_startup_ui()
+
+    def _get_title(self, base=None):
+        base = base or self.title() or "Python Chat App"
+        if getattr(self, 'debug_mode', None) and self.debug_mode.get():
+            return f"{base} [Debug Mode]"
+        return base
+
+    def title(self, new_title=None):
+        if new_title is not None:
+            super().title(self._get_title(new_title))
+        else:
+            return super().title()
 
     def _build_startup_ui(self):
         for widget in self.winfo_children():
@@ -53,6 +66,10 @@ class ChatApp(tk.Tk):
         self._update_connect_btn_state()
         self.username_var.trace_add('write', lambda *args: self._update_connect_btn_state())
         self.use_encryption.trace_add('write', lambda *args: self._update_connect_btn_state())
+        # Add debug toggle
+        self.debug_mode.set(False)
+        self.debug_toggle = ttk.Checkbutton(frame, text="Enable Debug Mode", variable=self.debug_mode, command=self._update_title_for_debug)
+        self.debug_toggle.grid(row=5, column=0, columnspan=3, pady=5)
 
     def _set_default_username(self):
         mode = self.mode_var.get()
@@ -202,8 +219,8 @@ class ChatApp(tk.Tk):
                     return
                 peer_username = exchange_usernames(self.connection, self.username, self.is_server)
                 self.peer_username = peer_username
-                # Use API for handshake
-                self.api.handshake(self.connection, self.is_server, chat_callback=self._append_chat)
+                # Use API for handshake, pass debug_mode
+                self.api.handshake(self.connection, self.is_server, chat_callback=self._append_chat, debug_mode=self.debug_mode.get())
                 self._append_chat(f"Alert : Connection established with {peer_username}")
                 self.title(f"Python Chat App - Connected to {peer_username} at {self.chat_ip}:{self.chat_port}")
             except Exception as e:
@@ -266,6 +283,9 @@ class ChatApp(tk.Tk):
             except Exception:
                 pass
         self.destroy()
+
+    def _update_title_for_debug(self):
+        self.title(self._get_title())
 
 if __name__ == "__main__":
     app = ChatApp()

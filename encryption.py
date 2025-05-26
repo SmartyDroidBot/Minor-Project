@@ -1,166 +1,76 @@
 import os
 import base64
-import oqs
-from cryptography.hazmat.primitives.asymmetric import x25519
+import json
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, PrivateFormat, NoEncryption
 from cryptography.hazmat.backends import default_backend
+import x3dh
+from pqxdh.core import PQXDHCore
+from pqxdh.serialize import (
+    pqxdh_bundle_to_wire, pqxdh_bundle_from_wire,
+    pqxdh_peer_bundle_to_wire, pqxdh_peer_bundle_from_wire
+)
 
-# Placeholder for encryption logic (to be implemented later)
 class EncryptionManager:
     def __init__(self):
+        self.pqxdh = PQXDHCore()
         self.session_key = None
-        self.bundle = None
-        self.private_keys = None
-        self.peer_bundle = None
 
     @staticmethod
     def generate_bundle():
-        # X25519
-        x25519_priv = x25519.X25519PrivateKey.generate()
-        x25519_pub = x25519_priv.public_key()
-        x25519_pub_bytes = x25519_pub.public_bytes(Encoding.Raw, PublicFormat.Raw)
-        x25519_priv_bytes = x25519_priv.private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption())
-        # Kyber1024
-        kyber = oqs.KeyEncapsulation('Kyber1024')
-        kyber_pub = kyber.generate_keypair()
-        kyber_priv = kyber.export_secret_key()
-        # Dilithium2
-        dilithium = oqs.Signature('Dilithium2')
-        dilithium_pub = dilithium.generate_keypair()
-        dilithium_priv = dilithium.export_secret_key()
-        # Sign X25519 pub and Kyber pub with Dilithium2
-        signed_x25519 = dilithium.sign(x25519_pub_bytes)
-        signed_kyber = dilithium.sign(kyber_pub)
-        bundle = {
-            'x25519_identity': base64.b64encode(x25519_pub_bytes).decode(),
-            'x25519_signed_prekey': base64.b64encode(x25519_pub_bytes).decode(),
-            'x25519_signed_prekey_sig': base64.b64encode(signed_x25519).decode(),
-            'x25519_prekeys': [],  # For simplicity, not using one-time prekeys
-            'kyber1024_identity': base64.b64encode(kyber_pub).decode(),
-            'kyber1024_signed_prekey': base64.b64encode(kyber_pub).decode(),
-            'kyber1024_signed_prekey_sig': base64.b64encode(signed_kyber).decode(),
-            'kyber1024_prekeys': [],
-            'dilithium2': base64.b64encode(dilithium_pub).decode()
-        }
-        private_keys = {
-            'x25519': x25519_priv_bytes,
-            'kyber1024': kyber_priv,
-            'dilithium2': dilithium_priv
-        }
-        return bundle, private_keys
+        bundle, private_keys = PQXDHCore.generate_bundle()
+        return pqxdh_bundle_to_wire(bundle, private_keys)
 
     def save_bundle_to_userdb(self, userdb):
         bundle, private_keys = self.generate_bundle()
         userdb.set_bundle(bundle, private_keys)
-        self.bundle = bundle
-        self.private_keys = private_keys
+        self.load_bundle_from_userdb(userdb)
 
     def load_bundle_from_userdb(self, userdb):
-        self.bundle = userdb.get_bundle()
-        self.private_keys = userdb.get_private_keys_bundle()
+        bundle = userdb.get_bundle()
+        priv = userdb.get_private_keys_bundle()
+        bndl, privd = pqxdh_bundle_from_wire(bundle, priv)
+        self.pqxdh.load_bundle(bndl, privd)
 
     def export_bundle(self):
-        return self.bundle
+        bundle, kyber_pub = self.pqxdh.export_bundle()
+        return pqxdh_peer_bundle_to_wire(bundle, kyber_pub)
 
     def import_peer_bundle(self, bundle):
-        self.peer_bundle = bundle
+        peer_bundle = pqxdh_peer_bundle_from_wire(bundle)
+        self.pqxdh.import_peer_bundle(peer_bundle)
 
-    def perform_key_exchange(self, sock, is_server: bool, chat_callback=None):
-        import json
-        import socket
-        sock.settimeout(60)  # Set a longer timeout for handshake (was 10)
-        def recv_all(sock, n):
-            data = b''
-            while len(data) < n:
-                chunk = sock.recv(n - len(data))
-                if not chunk:
-                    raise Exception('Socket connection broken')
-                data += chunk
-            return data
-        def recv_msg(sock):
-            length_bytes = recv_all(sock, 4)
+    def perform_key_exchange(self, sock, is_server: bool, chat_callback=None, debug_mode=False):
+        def recv_msg():
+            length_bytes = sock.recv(4)
             if not length_bytes or len(length_bytes) < 4:
                 raise Exception('Connection closed or invalid length header')
             length = int.from_bytes(length_bytes, byteorder='big')
             if length == 0:
                 raise Exception('Received empty message')
-            return recv_all(sock, length)
-        def send_msg(sock, data: bytes):
+            return sock.recv(length)
+        def send_msg(data: bytes):
             length = len(data)
             sock.sendall(length.to_bytes(4, byteorder='big'))
             sock.sendall(data)
-        print(f"[HANDSHAKE] is_server={is_server} starting bundle exchange")
-        print(f"[HANDSHAKE] Using socket: {sock}, fileno={sock.fileno()}, laddr={sock.getsockname()}, raddr={sock.getpeername()}")
+        import json
+        my_bundle = self.export_bundle()
         if is_server:
-            peer_bundle_json = recv_msg(sock).decode('utf-8')
-            print(f"[HANDSHAKE] Server received bundle: {peer_bundle_json[:60]}...")
-            if not peer_bundle_json.strip():
-                raise Exception('Received empty bundle from peer')
-            send_msg(sock, json.dumps(self.bundle).encode('utf-8'))
-            print(f"[HANDSHAKE] Server sent bundle")
+            peer_bundle_json = recv_msg().decode('utf-8')
+            send_msg(json.dumps(my_bundle).encode('utf-8'))
         else:
-            send_msg(sock, json.dumps(self.bundle).encode('utf-8'))
-            print(f"[HANDSHAKE] Client sent bundle")
-            peer_bundle_json = recv_msg(sock).decode('utf-8')
-            print(f"[HANDSHAKE] Client received bundle: {peer_bundle_json[:60]}...")
-            if not peer_bundle_json.strip():
-                raise Exception('Received empty bundle from peer')
+            send_msg(json.dumps(my_bundle).encode('utf-8'))
+            peer_bundle_json = recv_msg().decode('utf-8')
         peer_bundle = json.loads(peer_bundle_json)
         self.import_peer_bundle(peer_bundle)
-        # Verify signatures
-        peer_dilithium_pub = base64.b64decode(peer_bundle['dilithium2'])
-        peer_dilithium = oqs.Signature('Dilithium2')
-        x25519_signed_prekey = base64.b64decode(peer_bundle['x25519_signed_prekey'])
-        x25519_signed_prekey_sig = base64.b64decode(peer_bundle['x25519_signed_prekey_sig'])
-        kyber_signed_prekey = base64.b64decode(peer_bundle['kyber1024_signed_prekey'])
-        kyber_signed_prekey_sig = base64.b64decode(peer_bundle['kyber1024_signed_prekey_sig'])
-        if not peer_dilithium.verify(x25519_signed_prekey, x25519_signed_prekey_sig, peer_dilithium_pub):
-            raise Exception('Peer X25519 signed prekey signature invalid!')
-        if not peer_dilithium.verify(kyber_signed_prekey, kyber_signed_prekey_sig, peer_dilithium_pub):
-            raise Exception('Peer Kyber1024 signed prekey signature invalid!')
-        # Hybrid DH: X25519 + Kyber1024
-        my_x25519_priv = x25519.X25519PrivateKey.from_private_bytes(self.private_keys['x25519'])
-        peer_x25519_pub = x25519.X25519PublicKey.from_public_bytes(base64.b64decode(peer_bundle['x25519_identity']))
-        x25519_secret = my_x25519_priv.exchange(peer_x25519_pub)
-        my_kyber = oqs.KeyEncapsulation('Kyber1024', secret_key=self.private_keys['kyber1024'])
-        peer_kyber_pub = base64.b64decode(peer_bundle['kyber1024_identity'])
-        # Show exchanged keys in chat (truncate for display)
-        if chat_callback:
-            chat_callback(f"[Key Exchange] Peer X25519 pub: {peer_bundle['x25519_identity'][:16]}... (truncated)")
-            chat_callback(f"[Key Exchange] Peer Kyber1024 pub: {peer_bundle['kyber1024_identity'][:16]}... (truncated)")
-        if is_server:
-            print(f"[HANDSHAKE] Server waiting for Kyber ciphertext...")
-            ct = recv_msg(sock)
-            print(f"[HANDSHAKE] Server received Kyber ciphertext: {ct[:16].hex()}...")
-            kyber_secret = my_kyber.decap_secret(ct)
-        else:
-            print(f"[HANDSHAKE] Client sending Kyber ciphertext...")
-            ct, kyber_secret = my_kyber.encap_secret(peer_kyber_pub)
-            send_msg(sock, ct)
-            print(f"[HANDSHAKE] Client sent Kyber ciphertext: {ct[:16].hex()}...")
-        concat_secret = x25519_secret + kyber_secret
-        hkdf = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=None,
-            info=b'pqxdh-session',
-            backend=default_backend()
-        )
-        self.session_key = hkdf.derive(concat_secret)
-        # Show session key in chat (truncate for display)
-        if chat_callback:
-            chat_callback(f"[Key Exchange] Session key: {self.session_key.hex()[:16]}... (truncated)")
-        print(f"[HANDSHAKE] Session key established: {self.session_key[:8].hex()}...")
-        # Remove timeout after handshake
-        try:
-            sock.settimeout(None)
-        except Exception:
-            pass
-        if chat_callback:
-            chat_callback('[Key Exchange] Secure channel established (PQXDH)')
-        return True
+        def pqxdh_send(data):
+            send_msg(data)
+        def pqxdh_recv():
+            return recv_msg()
+        # Do NOT reset socket timeout after handshake
+        result = self.pqxdh.perform_key_exchange(pqxdh_send, pqxdh_recv, is_server, chat_callback, debug_mode=debug_mode)
+        self.session_key = self.pqxdh.session_key
+        return result
 
     def encrypt(self, data: bytes) -> bytes:
         if not self.session_key:

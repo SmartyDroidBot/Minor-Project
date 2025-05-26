@@ -9,7 +9,7 @@ class ChatAPI:
         self.encryption_manager = None
         if use_encryption:
             self.encryption_manager = EncryptionManager()
-            if not self.userdb.get_identity_key() or not self.userdb.get_private_keys():
+            if not self.userdb.get_bundle() or not self.userdb.get_private_keys_bundle():
                 self.encryption_manager.save_bundle_to_userdb(self.userdb)
             else:
                 self.encryption_manager.load_bundle_from_userdb(self.userdb)
@@ -47,28 +47,20 @@ class ChatAPI:
         except socket.timeout:
             print("[NEGOTIATE] Timed out during encryption negotiation.")
             raise Exception("Timed out during encryption negotiation.")
-        finally:
-            if sock and orig_timeout is not None:
-                sock.settimeout(orig_timeout)
 
-    def handshake(self, connection, is_server, chat_callback=None):
+    def handshake(self, connection, is_server, chat_callback=None, debug_mode=False):
         if self.use_encryption:
-            # Use correct socket: ChatServer.client_sock (preferred), else ChatClient.sock
             sock = getattr(connection, 'client_sock', None)
             if sock is None:
                 sock = getattr(connection, 'sock', None)
-            self.encryption_manager.perform_key_exchange(
-                sock,
-                is_server=is_server,
-                chat_callback=chat_callback
-            )
+            self.encryption_manager.perform_key_exchange(sock, is_server, chat_callback, debug_mode=debug_mode)
 
     def encrypt(self, data: bytes) -> bytes:
-        if self.use_encryption and self.encryption_manager:
+        if self.use_encryption:
             return self.encryption_manager.encrypt(data)
         return data
 
     def decrypt(self, data: bytes) -> bytes:
-        if self.use_encryption and self.encryption_manager:
+        if self.use_encryption:
             return self.encryption_manager.decrypt(data)
         return data
