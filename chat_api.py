@@ -47,6 +47,14 @@ class ChatAPI:
         except socket.timeout:
             print("[NEGOTIATE] Timed out during encryption negotiation.")
             raise Exception("Timed out during encryption negotiation.")
+        finally:
+            # Restore original timeout after negotiation
+            if sock and orig_timeout is not None:
+                sock.settimeout(orig_timeout)
+                print(f"[NEGOTIATE] Restored original timeout: {orig_timeout}")
+            elif sock:
+                sock.settimeout(None)  # Remove timeout (blocking mode)
+                print("[NEGOTIATE] Removed timeout, set to blocking mode")
 
     def handshake(self, connection, is_server, chat_callback=None, debug_mode=False):
         if self.use_encryption:
