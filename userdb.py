@@ -17,23 +17,23 @@ class UserDB:
         if not os.path.exists(self.db_path):
             with open(self.db_path, 'w', encoding='utf-8') as f:
                 json.dump({
-                    "identity_keys": {},
+                    "identity_key": {},
                     "private_keys": {},
-                    "users": {}
+                    "peers": {}
                 }, f)
-            return {"identity_keys": {}, "private_keys": {}, "users": {}}
+            return {"identity_key": {}, "private_keys": {}, "peers": {}}
         with open(self.db_path, 'r', encoding='utf-8') as f:
             try:
                 return json.load(f)
             except Exception:
-                return {"identity_keys": {}, "private_keys": {}, "users": {}}
+                return {"identity_key": {}, "private_keys": {}, "peers": {}}
 
     def save(self):
         with open(self.db_path, 'w', encoding='utf-8') as f:
             json.dump(self.data, f, indent=2)
 
-    def set_identity_keys(self, x25519_pub: bytes, kyber_pub: bytes, dilithium_pub: bytes):
-        self.data["identity_keys"] = {
+    def set_identity_key(self, x25519_pub: bytes, kyber_pub: bytes, dilithium_pub: bytes):
+        self.data["identity_key"] = {
             "x25519": base64.b64encode(x25519_pub).decode(),
             "kyber1024": base64.b64encode(kyber_pub).decode(),
             "dilithium2": base64.b64encode(dilithium_pub).decode()
@@ -48,42 +48,51 @@ class UserDB:
         }
         self.save()
 
-    def get_identity_keys(self) -> Dict[str, str]:
-        return self.data.get("identity_keys", {})
+    def get_identity_key(self) -> Dict[str, str]:
+        return self.data.get("identity_key", {})
 
     def get_private_keys(self) -> Dict[str, str]:
         return self.data.get("private_keys", {})
 
-    def add_user_bundle(self, peer_username: str, bundle: dict):
-        users = self.data.setdefault("users", {})
-        users[peer_username] = {
+    def add_peer_bundle(self, peer_username: str, bundle: dict):
+        peers = self.data.setdefault("peers", {})
+        peers[peer_username] = {
             "bundle": bundle,
             "first_connected": str(datetime.now())
         }
         self.save()
 
-    def get_user_bundle(self, peer_username: str) -> dict:
-        return self.data.get("users", {}).get(peer_username, {}).get("bundle", {})
+    def get_peer_bundle(self, peer_username: str) -> dict:
+        return self.data.get("peers", {}).get(peer_username, {}).get("bundle", {})
 
-    def get_all_users(self) -> Dict[str, dict]:
-        return self.data.get("users", {})
-
-    def clear_prekeys(self, peer_username: str):
-        # Optionally clear used prekeys for a peer
-        user = self.data.get("users", {}).get(peer_username, {})
-        if user and "bundle" in user:
-            user["bundle"]["x25519_prekeys"] = []
-            user["bundle"]["kyber1024_prekeys"] = []
-            self.save()
+    def get_all_peers(self) -> Dict[str, dict]:
+        return self.data.get("peers", {})
 
     def set_bundle(self, bundle: dict, private_keys: dict):
-        self.data["pqxdh_bundle"] = bundle
-        self.data["pqxdh_private_keys"] = {k: base64.b64encode(v).decode() for k, v in private_keys.items()}
+        # For compatibility with existing code, store as identity_key/private_keys
+        self.set_identity_key(
+            base64.b64decode(bundle["x25519_identity"]),
+            base64.b64decode(bundle["kyber1024_identity"]),
+            base64.b64decode(bundle["dilithium2"])
+        )
+        self.set_private_keys(
+            private_keys["x25519"],
+            private_keys["kyber1024"],
+            private_keys["dilithium2"]
+        )
         self.save()
 
     def get_bundle(self) -> dict:
-        return self.data.get("pqxdh_bundle", {})
+        # For compatibility, reconstruct a bundle from identity_key
+        idk = self.get_identity_key()
+        if not idk:
+            return {}
+        return {
+            "x25519_identity": idk.get("x25519", ""),
+            "kyber1024_identity": idk.get("kyber1024", ""),
+            "dilithium2": idk.get("dilithium2", "")
+        }
 
     def get_private_keys_bundle(self) -> dict:
-        d = self.data.get("pqxdh_private_keys", {})
+        d = self.get_private_keys()
         return {k: base64.b64decode(v) for k, v in d.items()}

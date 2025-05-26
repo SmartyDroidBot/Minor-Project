@@ -18,6 +18,7 @@ def exchange_usernames(connection, my_username, is_server):
         # Client sends first, then receives
         connection.send(my_username.encode('utf-8'))
         peer_username = connection.receive().decode('utf-8', errors='replace')
+    # Optionally, you could store peer bundles here using userdb.add_peer_bundle(peer_username, bundle)
     return peer_username
 
 # Encrypted handshake logic (currently just alert and title update)

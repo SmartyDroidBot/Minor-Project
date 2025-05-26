@@ -9,7 +9,7 @@ class ChatAPI:
         self.encryption_manager = None
         if use_encryption:
             self.encryption_manager = EncryptionManager()
-            if not self.userdb.get_identity_keys() or not self.userdb.get_private_keys():
+            if not self.userdb.get_identity_key() or not self.userdb.get_private_keys():
                 self.encryption_manager.save_bundle_to_userdb(self.userdb)
             else:
                 self.encryption_manager.load_bundle_from_userdb(self.userdb)
