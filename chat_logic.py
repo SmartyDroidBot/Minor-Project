@@ -33,6 +33,13 @@ def start_receiving(app):
                 data = app.connection.receive()
                 if not data:
                     break
+                # Use API to decrypt if needed
+                if hasattr(app, 'api') and hasattr(app.api, 'decrypt'):
+                    try:
+                        data = app.api.decrypt(data)
+                    except Exception as e:
+                        app.error_var.set(f"Decryption error: {e}")
+                        break
                 # Use peer's username in chat
                 app._append_chat(f"[{app.peer_username}]: {data.decode('utf-8', errors='replace')}")
             except Exception as e:

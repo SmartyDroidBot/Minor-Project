@@ -171,6 +171,9 @@ class ChatApp(tk.Tk):
         self.copy_error_btn.pack(padx=10, pady=(0,2), anchor="e")
         self.home_btn = ttk.Button(mainframe, text="Return to Home", command=self._build_startup_ui)
         self.home_btn.pack(padx=10, pady=(0,2), anchor="e")
+        # Add Disconnect button
+        self.disconnect_btn = ttk.Button(mainframe, text="Disconnect", command=self._disconnect_and_return_home)
+        self.disconnect_btn.pack(padx=10, pady=(0,2), anchor="e")
         send_frame = ttk.Frame(mainframe)
         send_frame.pack(fill="x", padx=10, pady=10)
         self.msg_var = tk.StringVar()
@@ -245,6 +248,15 @@ class ChatApp(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(self.error_var.get())
         self.update()  # Keeps clipboard after window closes
+
+    def _disconnect_and_return_home(self):
+        self.connected = False
+        if self.connection:
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+        self._build_startup_ui()
 
     def on_close(self):
         self.connected = False

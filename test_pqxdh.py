@@ -43,6 +43,13 @@ def server_thread():
         print("[SERVER] Starting handshake")
         api.handshake(server, is_server=True)
         print("[SERVER] Handshake complete")
+        # Test message exchange
+        print("[SERVER] Waiting for encrypted message...")
+        encrypted_data = server.receive()
+        print(f"[SERVER] Received encrypted data: {encrypted_data[:32]}... (truncated)")
+        decrypted = api.decrypt(encrypted_data)
+        print(f"[SERVER] Decrypted message: {decrypted.decode('utf-8', errors='replace')}")
+        results["server_msg"] = decrypted.decode('utf-8', errors='replace')
         results["server"] = peer_username
     except Exception as e:
         print(f"[SERVER] Exception: {e}")
@@ -71,6 +78,11 @@ def client_thread():
         print("[CLIENT] Starting handshake")
         api.handshake(client, is_server=False)
         print("[CLIENT] Handshake complete")
+        # Test message exchange
+        test_msg = "Hello from Bob!"
+        encrypted = api.encrypt(test_msg.encode('utf-8'))
+        print(f"[CLIENT] Sending encrypted message: {encrypted[:32]}... (truncated)")
+        client.send(encrypted)
         results["client"] = peer_username
     except Exception as e:
         print(f"[CLIENT] Exception: {e}")
@@ -87,6 +99,7 @@ def run_test():
     print("Server peer username:", results["server"])
     print("Client peer username:", results["client"])
     print("Errors:", results["error"])
+    print("Server received message:", results.get("server_msg"))
 
 if __name__ == "__main__":
     run_test()

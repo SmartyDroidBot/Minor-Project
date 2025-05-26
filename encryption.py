@@ -70,7 +70,7 @@ class EncryptionManager:
     def perform_key_exchange(self, sock, is_server: bool, chat_callback=None):
         import json
         import socket
-        sock.settimeout(10)  # Set a timeout for handshake
+        sock.settimeout(60)  # Set a longer timeout for handshake (was 10)
         def recv_all(sock, n):
             data = b''
             while len(data) < n:
@@ -124,9 +124,12 @@ class EncryptionManager:
         my_x25519_priv = x25519.X25519PrivateKey.from_private_bytes(self.private_keys['x25519'])
         peer_x25519_pub = x25519.X25519PublicKey.from_public_bytes(base64.b64decode(peer_bundle['x25519_identity']))
         x25519_secret = my_x25519_priv.exchange(peer_x25519_pub)
-        my_kyber = oqs.KeyEncapsulation('Kyber1024')
-        my_kyber._secret_key = self.private_keys['kyber1024']
+        my_kyber = oqs.KeyEncapsulation('Kyber1024', secret_key=self.private_keys['kyber1024'])
         peer_kyber_pub = base64.b64decode(peer_bundle['kyber1024_identity'])
+        # Show exchanged keys in chat (truncate for display)
+        if chat_callback:
+            chat_callback(f"[Key Exchange] Peer X25519 pub: {peer_bundle['x25519_identity'][:16]}... (truncated)")
+            chat_callback(f"[Key Exchange] Peer Kyber1024 pub: {peer_bundle['kyber1024_identity'][:16]}... (truncated)")
         if is_server:
             print(f"[HANDSHAKE] Server waiting for Kyber ciphertext...")
             ct = recv_msg(sock)
@@ -146,7 +149,15 @@ class EncryptionManager:
             backend=default_backend()
         )
         self.session_key = hkdf.derive(concat_secret)
+        # Show session key in chat (truncate for display)
+        if chat_callback:
+            chat_callback(f"[Key Exchange] Session key: {self.session_key.hex()[:16]}... (truncated)")
         print(f"[HANDSHAKE] Session key established: {self.session_key[:8].hex()}...")
+        # Remove timeout after handshake
+        try:
+            sock.settimeout(None)
+        except Exception:
+            pass
         if chat_callback:
             chat_callback('[Key Exchange] Secure channel established (PQXDH)')
         return True
