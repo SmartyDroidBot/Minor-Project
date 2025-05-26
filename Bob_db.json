@@ -1,0 +1,12 @@
+{
+  "identity_key": "",
+  "users": {
+    "Alice": {
+      "first_connected": "2025-05-26 08:12:20.669201",
+      "signed_prekey": "",
+      "prekey": "",
+      "x3dh_bundle": {},
+      "other": {}
+    }
+  }
+}

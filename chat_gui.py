@@ -4,6 +4,7 @@ import threading
 import socket
 from networking import ChatClient, ChatServer, ConnectionError
 from chat_logic import exchange_usernames, start_receiving
+from userdb import UserDB
 
 class ChatApp(tk.Tk):
     def __init__(self):
@@ -16,6 +17,7 @@ class ChatApp(tk.Tk):
         self.connected = False
         self.use_encryption = tk.BooleanVar(value=False)
         self.error_var = tk.StringVar(value="")
+        self.userdb = None  # Will be initialized after username is set
         self._build_startup_ui()
 
     def _build_startup_ui(self):
@@ -79,6 +81,7 @@ class ChatApp(tk.Tk):
             self.error_var.set("Username is required for encrypted communication.")
             return
         self.username = username
+        self.userdb = UserDB(self.username)  # Initialize userdb for this user
         mode = self.mode_var.get()
         ip = self.ip_entry.get().strip()
         port = int(self.port_entry.get().strip())
@@ -159,9 +162,9 @@ class ChatApp(tk.Tk):
     def _start_username_exchange(self):
         def exchange():
             try:
-                # Use chat_logic to exchange usernames (pass is_server)
                 peer_username = exchange_usernames(self.connection, self.username, self.is_server)
                 self.peer_username = peer_username
+                self.userdb.add_user(peer_username)
                 self._append_chat(f"Alert : Connection established with {peer_username}")
                 self.title(f"Python Chat App - Connected to {peer_username} at {self.chat_ip}:{self.chat_port}")
             except Exception as e:
@@ -196,10 +199,6 @@ class ChatApp(tk.Tk):
             self.error_var.set("")
         except Exception as e:
             self.error_var.set(str(e))
-
-    def _start_receiving(self):
-        # Deprecated: now handled by chat_logic.start_receiving after username exchange
-        pass
 
     def on_close(self):
         self.connected = False
