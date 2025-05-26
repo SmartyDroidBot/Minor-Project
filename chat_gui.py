@@ -5,7 +5,9 @@ import socket
 from networking import ChatClient, ChatServer, ConnectionError
 from chat_logic import exchange_usernames, start_receiving
 from userdb import UserDB
+from chat_api import ChatAPI
 
+# --- API Layer: ChatApp logic should call these APIs, not direct connection/encryption ---
 class ChatApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -81,7 +83,7 @@ class ChatApp(tk.Tk):
             self.error_var.set("Username is required for encrypted communication.")
             return
         self.username = username
-        self.userdb = UserDB(self.username)  # Initialize userdb for this user
+        self.userdb = UserDB(self.username)
         mode = self.mode_var.get()
         ip = self.ip_entry.get().strip()
         port = int(self.port_entry.get().strip())
@@ -90,6 +92,8 @@ class ChatApp(tk.Tk):
         self.error_var.set("")
         for widget in self.winfo_children():
             widget.destroy()
+        self.abort_connection = False
+        self.api = ChatAPI(self.username, self.userdb, use_encryption)
         if self.is_server:
             # Show waiting UI
             waiting_frame = ttk.Frame(self)
@@ -100,11 +104,21 @@ class ChatApp(tk.Tk):
             self.abort_btn.pack(pady=10)
             self.error_label = tk.Label(waiting_frame, textvariable=self.error_var, fg="red")
             self.error_label.pack(pady=5)
+            self.error_label.configure(cursor="xterm")  # Make error label selectable
+            self.copy_error_btn = ttk.Button(waiting_frame, text="Copy Error", command=lambda: self._copy_error_to_clipboard())
+            self.copy_error_btn.pack(pady=2)
+            self.home_btn = ttk.Button(waiting_frame, text="Return to Home", command=self._build_startup_ui)
+            self.home_btn.pack(pady=2)
             self.connection = ChatServer(ip, port, use_encryption)
             def on_waiting_callback(host, port):
                 self.waiting_label.config(text=f"Waiting for client to connect at {host}:{port}")
             def on_abort_callback():
                 self.error_var.set("Server aborted waiting for connection.")
+                self.abort_connection = True
+                # Always show home button on abort
+                if not hasattr(self, 'home_btn') or not self.home_btn.winfo_exists():
+                    self.home_btn = ttk.Button(waiting_frame, text="Return to Home", command=self._build_startup_ui)
+                    self.home_btn.pack(pady=2)
             def server_thread():
                 try:
                     addr = self.connection.start(on_waiting_callback=on_waiting_callback, on_abort_callback=on_abort_callback)
@@ -113,6 +127,11 @@ class ChatApp(tk.Tk):
                         self._build_chat_ui(ip, port, addr)
                 except Exception as e:
                     self.error_var.set(str(e))
+                    self.abort_connection = True
+                    # Always show home button on abort
+                    if not hasattr(self, 'home_btn') or not self.home_btn.winfo_exists():
+                        self.home_btn = ttk.Button(waiting_frame, text="Return to Home", command=self._build_startup_ui)
+                        self.home_btn.pack(pady=2)
             threading.Thread(target=server_thread, daemon=True).start()
         else:
             try:
@@ -120,18 +139,21 @@ class ChatApp(tk.Tk):
                 self.connection.connect()
                 self.connected = True
                 self._build_chat_ui(ip, port, (ip, port))
-                if use_encryption:
-                    self.connection.encryption_manager.perform_key_exchange(
-                        self.connection.sock,
-                        is_server=self.is_server,
-                        chat_callback=self._append_chat
-                    )
             except Exception as e:
                 self.error_var.set(str(e))
+                if not hasattr(self, 'home_btn') or not self.home_btn.winfo_exists():
+                    self.home_btn = ttk.Button(self, text="Return to Home", command=self._build_startup_ui)
+                    self.home_btn.pack(pady=2)
 
     def _abort_server_wait(self):
         if self.connection:
             self.connection.abort_waiting()
+        self.abort_connection = True
+        self.error_var.set("Server aborted waiting for connection.")
+        # Always show home button on abort
+        if not hasattr(self, 'home_btn') or not self.home_btn.winfo_exists():
+            self.home_btn = ttk.Button(self, text="Return to Home", command=self._build_startup_ui)
+            self.home_btn.pack(pady=2)
 
     def _build_chat_ui(self, ip, port, addr):
         for widget in self.winfo_children():
@@ -144,6 +166,11 @@ class ChatApp(tk.Tk):
         self.chat_history.pack(fill="both", expand=True, padx=10, pady=(10,0))
         self.error_label = tk.Label(mainframe, textvariable=self.error_var, fg="red")
         self.error_label.pack(fill="x", padx=10, pady=(2,0))
+        self.error_label.configure(cursor="xterm")  # Make error label selectable
+        self.copy_error_btn = ttk.Button(mainframe, text="Copy Error", command=lambda: self._copy_error_to_clipboard())
+        self.copy_error_btn.pack(padx=10, pady=(0,2), anchor="e")
+        self.home_btn = ttk.Button(mainframe, text="Return to Home", command=self._build_startup_ui)
+        self.home_btn.pack(padx=10, pady=(0,2), anchor="e")
         send_frame = ttk.Frame(mainframe)
         send_frame.pack(fill="x", padx=10, pady=10)
         self.msg_var = tk.StringVar()
@@ -162,14 +189,27 @@ class ChatApp(tk.Tk):
     def _start_username_exchange(self):
         def exchange():
             try:
+                # Use API for encryption negotiation
+                if not self.api.negotiate_encryption(self.connection, self.is_server):
+                    self.error_var.set("Encryption setting mismatch. Connection aborted.")
+                    self.abort_connection = True
+                    if not hasattr(self, 'home_btn') or not self.home_btn.winfo_exists():
+                        self.home_btn = ttk.Button(self, text="Return to Home", command=self._build_startup_ui)
+                        self.home_btn.pack(pady=2)
+                    return
                 peer_username = exchange_usernames(self.connection, self.username, self.is_server)
                 self.peer_username = peer_username
-                self.userdb.add_user(peer_username)
+                # Use API for handshake
+                self.api.handshake(self.connection, self.is_server, chat_callback=self._append_chat)
                 self._append_chat(f"Alert : Connection established with {peer_username}")
                 self.title(f"Python Chat App - Connected to {peer_username} at {self.chat_ip}:{self.chat_port}")
             except Exception as e:
                 self.error_var.set(f"Username exchange failed: {e}")
-            # Now start receiving chat messages using chat_logic
+                self.abort_connection = True
+                if not hasattr(self, 'home_btn') or not self.home_btn.winfo_exists():
+                    self.home_btn = ttk.Button(self, text="Return to Home", command=self._build_startup_ui)
+                    self.home_btn.pack(pady=2)
+                return
             start_receiving(self)
         threading.Thread(target=exchange, daemon=True).start()
 
@@ -192,13 +232,19 @@ class ChatApp(tk.Tk):
         if not msg:
             return
         try:
-            self.connection.send(msg.encode('utf-8'))
-            # Use our own username in chat
+            # Use API for encryption
+            data = self.api.encrypt(msg.encode('utf-8'))
+            self.connection.send(data)
             self._append_chat(f"[{self.username}]: {msg}")
             self.msg_var.set("")
             self.error_var.set("")
         except Exception as e:
             self.error_var.set(str(e))
+
+    def _copy_error_to_clipboard(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.error_var.get())
+        self.update()  # Keeps clipboard after window closes
 
     def on_close(self):
         self.connected = False
