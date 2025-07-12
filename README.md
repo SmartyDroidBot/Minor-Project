@@ -52,6 +52,3 @@ This project is a secure, end-to-end encrypted chat application implemented in P
 - Key exchange uses Hybrid X3DH-Kyber for post-quantum security (liboqs-python, x3dh).
 - AES-GCM is used for symmetric encryption.
 
-## License
-
-MIT License
