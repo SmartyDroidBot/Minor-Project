@@ -5,21 +5,21 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 import x3dh
-from pqxdh.core import PQXDHCore
-from pqxdh.serialize import (
-    pqxdh_bundle_to_wire, pqxdh_bundle_from_wire,
-    pqxdh_peer_bundle_to_wire, pqxdh_peer_bundle_from_wire
+from hybrid_x3dh_kyber.core import HybridX3DHKyberCore
+from hybrid_x3dh_kyber.serialize import (
+    hybrid_x3dh_kyber_bundle_to_wire, hybrid_x3dh_kyber_bundle_from_wire,
+    hybrid_x3dh_kyber_peer_bundle_to_wire, hybrid_x3dh_kyber_peer_bundle_from_wire
 )
 
 class EncryptionManager:
     def __init__(self):
-        self.pqxdh = PQXDHCore()
+        self.pqxdh = HybridX3DHKyberCore()
         self.session_key = None
 
     @staticmethod
     def generate_bundle():
-        bundle, private_keys = PQXDHCore.generate_bundle()
-        return pqxdh_bundle_to_wire(bundle, private_keys)
+        bundle, private_keys = HybridX3DHKyberCore.generate_bundle()
+        return hybrid_x3dh_kyber_bundle_to_wire(bundle, private_keys)
 
     def save_bundle_to_userdb(self, userdb):
         bundle, private_keys = self.generate_bundle()
@@ -29,15 +29,15 @@ class EncryptionManager:
     def load_bundle_from_userdb(self, userdb):
         bundle = userdb.get_bundle()
         priv = userdb.get_private_keys_bundle()
-        bndl, privd = pqxdh_bundle_from_wire(bundle, priv)
+        bndl, privd = hybrid_x3dh_kyber_bundle_from_wire(bundle, priv)
         self.pqxdh.load_bundle(bndl, privd)
 
     def export_bundle(self):
         bundle, kyber_pub = self.pqxdh.export_bundle()
-        return pqxdh_peer_bundle_to_wire(bundle, kyber_pub)
+        return hybrid_x3dh_kyber_peer_bundle_to_wire(bundle, kyber_pub)
 
     def import_peer_bundle(self, bundle):
-        peer_bundle = pqxdh_peer_bundle_from_wire(bundle)
+        peer_bundle = hybrid_x3dh_kyber_peer_bundle_from_wire(bundle)
         self.pqxdh.import_peer_bundle(peer_bundle)
 
     def perform_key_exchange(self, sock, is_server: bool, chat_callback=None, debug_mode=False):

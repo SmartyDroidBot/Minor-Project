@@ -1,6 +1,6 @@
 import base64
 
-def pqxdh_bundle_to_wire(bundle, private_keys):
+def hybrid_x3dh_kyber_bundle_to_wire(bundle, private_keys):
     # Convert all bytes to base64 strings for storage/networking
     def b64(x):
         if isinstance(x, bytes):
@@ -16,7 +16,7 @@ def pqxdh_bundle_to_wire(bundle, private_keys):
     priv['kyber1024'] = b64(private_keys['kyber1024'])
     return bndl, priv
 
-def pqxdh_bundle_from_wire(bundle, priv):
+def hybrid_x3dh_kyber_bundle_from_wire(bundle, priv):
     def b64d(x):
         if isinstance(x, str):
             return base64.b64decode(x)
@@ -31,7 +31,7 @@ def pqxdh_bundle_from_wire(bundle, priv):
     privd['kyber1024'] = b64d(priv['kyber1024'])
     return bndl, privd
 
-def pqxdh_peer_bundle_to_wire(bundle, kyber_pub):
+def hybrid_x3dh_kyber_peer_bundle_to_wire(bundle, kyber_pub):
     def b64(x):
         if isinstance(x, bytes):
             return base64.b64encode(x).decode()
@@ -43,7 +43,7 @@ def pqxdh_peer_bundle_to_wire(bundle, kyber_pub):
         'kyber1024_identity': b64(kyber_pub)
     }
 
-def pqxdh_peer_bundle_from_wire(bundle):
+def hybrid_x3dh_kyber_peer_bundle_from_wire(bundle):
     def b64d(x):
         if isinstance(x, str):
             return base64.b64decode(x)

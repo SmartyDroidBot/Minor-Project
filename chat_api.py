@@ -1,5 +1,6 @@
 # chat_api.py
 from encryption import EncryptionManager
+from hybrid_x3dh_kyber import HybridX3DHKyberCore
 
 class ChatAPI:
     def __init__(self, username, userdb, use_encryption):

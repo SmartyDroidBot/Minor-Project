@@ -5,9 +5,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend
 
-class PQXDHCore:
+class HybridX3DHKyberCore:
     """
-    Pure PQXDH core: bundle generation, serialization helpers, and hybrid key exchange (X3DH + Kyber).
+    Hybrid X3DH-Kyber core: bundle generation, serialization helpers, and hybrid key exchange (X3DH + Kyber).
     No JSON, no I/O, no networking. All data is bytes or python objects.
     """
     class _State(x3dh.State):
@@ -28,8 +28,8 @@ class PQXDHCore:
     def generate_bundle():
         identity_key_format = x3dh.types.IdentityKeyFormat.CURVE_25519
         hash_function = x3dh.crypto_provider.HashFunction.SHA_256
-        info = b"pqxdh-app"
-        state = PQXDHCore._State.create(identity_key_format, hash_function, info)
+        info = b"hybrid-x3dh-kyber-app"
+        state = HybridX3DHKyberCore._State.create(identity_key_format, hash_function, info)
         bundle = state.bundle
         kyber = oqs.KeyEncapsulation('Kyber1024')
         kyber_pub = kyber.generate_keypair()
@@ -53,8 +53,8 @@ class PQXDHCore:
         state_json = priv['x3dh_state']
         identity_key_format = x3dh.types.IdentityKeyFormat.CURVE_25519
         hash_function = x3dh.crypto_provider.HashFunction.SHA_256
-        info = b"pqxdh-app"
-        self.x3dh_state, _ = PQXDHCore._State.from_json(state_json, identity_key_format, hash_function, info)
+        info = b"hybrid-x3dh-kyber-app"
+        self.x3dh_state, _ = HybridX3DHKyberCore._State.from_json(state_json, identity_key_format, hash_function, info)
         self.kyber_priv = priv['kyber1024']
         self.kyber_pub = bundle['kyber1024_identity']
 
@@ -72,14 +72,9 @@ class PQXDHCore:
         return self.peer_kyber_pub
 
     def perform_key_exchange(self, send_func, recv_func, is_server: bool, chat_callback=None, debug_mode=False):
-        """
-        send_func/recv_func: user-supplied callables for sending/receiving bytes objects.
-        All serialization/deserialization is the caller's responsibility.
-        """
         import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        # Exchange bundles externally before calling this method!
         peer_bundle_obj = x3dh.types.Bundle(
             identity_key=self.peer_bundle['identity_key'],
             signed_pre_key=self.peer_bundle['signed_pre_key'],
@@ -132,7 +127,7 @@ class PQXDHCore:
             algorithm=hashes.SHA256(),
             length=32,
             salt=None,
-            info=b'pqxdh-session',
+            info=b'hybrid-x3dh-kyber-session',
             backend=default_backend()
         )
         self.session_key = hkdf.derive(concat_secret)
@@ -140,18 +135,16 @@ class PQXDHCore:
             chat_callback(f"[Debug] Session key: {trunc(self.session_key)}")
         if chat_callback:
             chat_callback(f"[Key Exchange] Session key: {self.session_key.hex()[:16]}... (truncated)")
-            chat_callback('[Key Exchange] Secure channel established (PQXDH)')
+            chat_callback('[Key Exchange] Secure channel established (Hybrid X3DH-Kyber)')
         return True
 
     @staticmethod
     def serialize_header(header_obj):
-        # Returns a tuple of bytes in a fixed order
         fields = [header_obj.identity_key, header_obj.ephemeral_key, header_obj.signed_pre_key, header_obj.pre_key]
         return b'||'.join([f if f is not None else b'' for f in fields])
 
     @staticmethod
     def deserialize_header(header_bytes):
-        # Returns a dict with the header fields
         parts = header_bytes.split(b'||')
         return {
             'identity_key': parts[0],

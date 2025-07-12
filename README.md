@@ -2,15 +2,15 @@
 
 This project is a secure, end-to-end encrypted chat application implemented in Python. It features a GUI, user authentication, and strong cryptography for secure communication between users.
 
-## Post-Quantum Security (PQXDH)
+## Hybrid X3DH-Kyber Security
 
-- This chat application uses a Post-Quantum Extended Triple Diffie-Hellman (PQXDH) protocol for key exchange, providing strong security even against quantum computers.
-- PQXDH combines the X3DH protocol with post-quantum cryptography (via liboqs-python and x3dh modules) to ensure future-proof, end-to-end encrypted messaging.
+- This chat application uses a hybrid key exchange protocol combining the classical X3DH (Extended Triple Diffie-Hellman) with the post-quantum Kyber KEM for key exchange, providing strong security even against quantum computers.
+- The protocol combines the X3DH protocol with post-quantum cryptography (via liboqs-python and x3dh modules) to ensure future-proof, end-to-end encrypted messaging.
 - All key exchanges and message encryptions are designed to resist both classical and quantum attacks.
 
 ## Features
 
-- End-to-end encryption using PQXDH (Post-Quantum X3DH) and AES-GCM
+- End-to-end encryption using Hybrid X3DH-Kyber and AES-GCM
 - User authentication and key management
 - GUI for easy chat experience
 - Secure key exchange and message encryption
@@ -26,7 +26,7 @@ This project is a secure, end-to-end encrypted chat application implemented in P
 - `userdb.py`: User database management
 - `user.py`: User model
 - `crypt/`: AES-GCM implementation and tests
-- `pqxdh/`: Post-quantum X3DH (PQXDH) key exchange implementation
+- `hybrid_x3dh_kyber/`: Hybrid X3DH-Kyber key exchange implementation
 
 ## Usage
 
@@ -49,7 +49,7 @@ This project is a secure, end-to-end encrypted chat application implemented in P
 ## Security Notes
 
 - All messages are encrypted end-to-end.
-- Key exchange uses PQXDH for post-quantum security (liboqs-python, x3dh).
+- Key exchange uses Hybrid X3DH-Kyber for post-quantum security (liboqs-python, x3dh).
 - AES-GCM is used for symmetric encryption.
 
 ## License
