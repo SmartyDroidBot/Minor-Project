@@ -1,4 +1,4 @@
-# Secure Chat Application
+# Post Quantum Secure Messaging Prototype
 
 This project is a secure, end-to-end encrypted chat application implemented in Python. It features a GUI, user authentication, and strong cryptography for secure communication between users.
 
